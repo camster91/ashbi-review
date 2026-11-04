@@ -1,6 +1,9 @@
 import { Hono } from 'hono';
+import { proxy } from './proxy';
 export interface Env { DB: D1Database; FILES: R2Bucket; BROWSER: Fetcher; ASSETS: Fetcher }
 const app = new Hono<{ Bindings: Env }>();
+app.route('/p', proxy);
+app.all('/p/*', c => c.text('Review unavailable', 404));
 app.get('/api/health', async c => {
   try { await c.env.DB.prepare('SELECT COUNT(*) AS count FROM users').first(); return c.json({ ok: true, database: 'ok' }); }
   catch { return c.json({ ok: false, database: 'unavailable' }, 503); }
