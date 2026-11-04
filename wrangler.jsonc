@@ -4,7 +4,7 @@
   "main": "worker/index.ts",
   "account_id": "1b2e351cbb39ab6b80efe36ca3577fe5",
   "keep_names": false,
-  "compatibility_date": "2025-11-01",
+  "compatibility_date": "2026-08-22",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {"directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/p/*"]},
   "d1_databases": [{"binding":"DB", "database_name":"ashbi-review", "database_id":"2ad03dd5-4887-4563-beb9-5ad6b807f290", "migrations_dir":"migrations"}],

@@ -1,12 +1,13 @@
 import { Hono } from 'hono';
 import type { Env } from './index';
 import { publicOrigin } from './proxy';
+import {captureForRequest,captureReview,localCapture} from './screenshots';
 import {createPin,createReply,reviewData,imageResponse} from './feedback';
 import {operator,validOrigin,type User} from './auth';
 import {jsonBody,text} from './input';
 import { imageType, InputError, MAX_IMAGE_BYTES, readBounded } from './images';
 
-type Review = { id: string; project_id: string; type: 'image' | 'site'; name: string; r2_key: string | null; source_url:string; share_token:string; screenshot_mode:number };
+type Review = { id: string; project_id: string; type: 'image' | 'site'; name: string; r2_key: string | null; source_url:string; share_token:string; screenshot_mode:number;screenshot_key:string|null;screenshot_width:number|null;screenshot_path:string|null };
 type Pin = { id: string; review_id: string; x_pct: number; y_pct: number; number: number; status: string };
 type Project = { id: string; name: string; client_name: string; archived: number };
 
@@ -98,10 +99,11 @@ reviewsApi.get('/reviews/:id/image', async c => {
   return imageResponse(c.env,review.r2_key);
 });
 reviewsApi.post('/reviews/:id/pins', async c => {
-  const review = await c.env.DB.prepare("SELECT id,type FROM reviews WHERE id=?").bind(c.req.param('id')).first<{id:string;type:string}>();
+  const review = await c.env.DB.prepare("SELECT * FROM reviews WHERE id=?").bind(c.req.param('id')).first<Review>();
   if (!review) return c.json({ error: 'Review not found.' }, 404);
   const data = await jsonBody(c.req.raw);
   const user=c.get('operator');const pin=await createPin(c.env,review,data,{name:user.local?text(data.author_name,'Name',120):user.name,email:user.email});
+  if(pin&&review.type==='site')c.executionCtx.waitUntil(captureForRequest(c.env,pin.id,c.req.url));
   return c.json({pin},201);
 });
 reviewsApi.post('/pins/:id/comments', async c => {
@@ -129,3 +131,14 @@ reviewsApi.patch('/reviews/:id/share',async c=>{
  if(data.expires_at!==null&&(typeof data.expires_at!=='number'||!Number.isInteger(data.expires_at)||data.expires_at<=Date.now()/1000))throw new InputError('Choose a future expiry date or no expiry.');
  const result=await c.env.DB.prepare('UPDATE reviews SET link_enabled=?,expires_at=? WHERE id=? RETURNING id').bind(Number(data.link_enabled),data.expires_at,c.req.param('id')).first();if(!result)return c.json({error:'Review not found.'},404);return c.json({ok:true});
 });
+
+reviewsApi.post('/reviews/:id/capture',async c=>{
+ if(localCapture(c.req.url))return c.json({error:'Browser capture is available on the deployed workspace. You can upload an image for local feedback.'},502);
+ const data=await jsonBody(c.req.raw);try{await captureReview(c.env,c.req.param('id'),text(data.page_path,'Page path',2000),Number(data.width));return c.json({ok:true});}catch(error){if(error instanceof InputError)throw error;return c.json({error:'The page capture failed. Try again, or upload an image of this page.'},502);}
+});
+reviewsApi.patch('/reviews/:id/mode',async c=>{
+ const result=await c.env.DB.prepare("UPDATE reviews SET screenshot_mode=0 WHERE id=? AND type='site' RETURNING id").bind(c.req.param('id')).first();return result?c.json({ok:true}):c.json({error:'Website review not found.'},404);
+});
+reviewsApi.get('/reviews/:id/snapshot',async c=>{const review=await c.env.DB.prepare('SELECT screenshot_key FROM reviews WHERE id=?').bind(c.req.param('id')).first<{screenshot_key:string|null}>();return review?.screenshot_key?imageResponse(c.env,review.screenshot_key):c.json({error:'Capture not found.'},404);});
+reviewsApi.get('/pins/:id/screenshot',async c=>{const pin=await c.env.DB.prepare('SELECT screenshot_key FROM pins WHERE id=?').bind(c.req.param('id')).first<{screenshot_key:string|null}>();return pin?.screenshot_key?imageResponse(c.env,pin.screenshot_key):c.json({error:'Capture not found.'},404);});
+reviewsApi.post('/pins/:id/capture',async c=>{const saved=await captureForRequest(c.env,c.req.param('id'),c.req.url);return saved?c.json({ok:true}):c.json({error:'The page capture failed. Try again later.'},502);});
