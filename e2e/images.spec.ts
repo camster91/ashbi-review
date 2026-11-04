@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 for(const width of [390,768,1440]) test(`persistent image review at ${width}px`,async({page})=>{
- await page.setViewportSize({width,height:900});await page.goto('/');
+ page.on('pageerror',error=>console.error('Browser application error:',error.message));
+ await page.setViewportSize({width,height:900});
+ const ready=await page.request.get('/api/projects');
+ expect(ready.status(),await ready.text()).toBe(200);
+ await page.goto('/');
+ await expect(page.getByRole('heading',{name:'Projects',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'New project',exact:true}).click();
  await page.getByRole('textbox',{name:'Client name',exact:true}).fill(`QA ${width} ${Date.now()}`);
  await page.getByRole('textbox',{name:'Project name',exact:true}).fill('Image workflow');
