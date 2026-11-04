@@ -1,3 +1,3 @@
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
 import { defineConfig } from 'vitest/config';
-export default defineConfig({ plugins: [cloudflareTest(async () => ({ wrangler: {configPath:'./wrangler.jsonc'}, miniflare: {bindings:{TEST_MIGRATIONS:await readD1Migrations('./migrations'),DEV_OPERATOR_TOKEN:'local-workers-test-key-only-32-characters-minimum'}} }))], test: { include:['test/**/*.test.ts'], setupFiles:['./test/setup.ts'] } });
+export default defineConfig({ plugins: [cloudflareTest(async () => ({ wrangler: {configPath:'./wrangler.jsonc'}, miniflare: {bindings:{TEST_MIGRATIONS:await readD1Migrations('./migrations'),DEV_OPERATOR_TOKEN:'local-workers-test-key-only-32-characters-minimum',RESEND_API_KEY:'test-only-not-a-real-key',EMAIL_FROM:'Ashbi Review <review@example.com>'}} }))], test: { include:['test/**/*.test.ts'], setupFiles:['./test/setup.ts'] } });

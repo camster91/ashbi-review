@@ -11,5 +11,7 @@
   "r2_buckets": [{"binding":"FILES", "bucket_name":"ashbi-review-files"}],
   "browser": {"binding":"BROWSER"},
   "routes": [{"pattern":"review.ashbi.ca", "custom_domain":true}],
+  "triggers":{"crons":["*/15 * * * *"]},
+  "vars":{"APP_ORIGIN":"https://review.ashbi.ca"},
   "observability": {"enabled":true, "logs":{"enabled":true,"invocation_logs":false}}
 }
