@@ -6,7 +6,7 @@ The internal dashboard API supports client-grouped projects, rename/archive/rest
 
 The temporary development gate requires both a request URL on `localhost` or `127.0.0.1` and a bearer token matching a local `DEV_OPERATOR_TOKEN` of at least 32 characters. No production hostname can use it, even if that variable is accidentally configured. Tokens are compared using SHA-256 digests and Workers' timing-safe comparison. Requests with unrelated Origin headers are rejected. There is no public setup or token-creation endpoint. Tests supply a synthetic test-only key.
 
-For local API development only, put a fresh random `DEV_OPERATOR_TOKEN` in ignored `.dev.vars`, apply migrations with `npx wrangler d1 migrations apply DB --local`, then run `npx wrangler dev`. Send the local key in the Authorization bearer header from a development client. Never commit the file, expose the key through a Vite client variable, or set this gate up as a production login. Replace the gate with operator sessions in #6.
+For local API development only, put a fresh random `DEV_OPERATOR_TOKEN` in ignored `.dev.vars`, apply migrations with `npx wrangler d1 migrations apply DB --local`, then run `npx wrangler dev --infer-origin-from-routes false`. Send the local key in the Authorization bearer header from a development client. Never commit the file, expose the key through a Vite client variable, or set this gate up as a production login. Replace the gate with operator sessions in #6.
 
 ## Internal routes
 
@@ -35,3 +35,5 @@ The dashboard implements these controls, loading/empty/error states, and keyboar
 Browser Rendering rendered a synthetic fixture with one visible open pin and two threaded comments at measured widths 390, 768 and 1440, with document scrollWidth equal to innerWidth at all three. A mobile screenshot was visually inspected. These checks use mocked API data and an inline sample image; they do not establish an actual upload/save/reload flow or assistive-technology conformance.
 
 Next: verify the five-pin/two-resolve flow through the actual dashboard at 390/768/1440 px; confirm measured viewport dimensions. Keep issue #4 acceptance checkboxes unchecked until that flow is verified. Do not start #5 before #4's reusable layer exists. No production deployment or merge is authorised by this checkpoint.
+
+Automated integration checks: `npx playwright install chromium && npm run test:e2e` starts local D1/R2/Worker and Vite, then uses real browser controls at 390/768/1440 px. The test asserts the private API is available before opening the dashboard, preventing a failed local auth setup from masquerading as a UI timeout. Wrangler must preserve the local request origin (`--infer-origin-from-routes false`); its default inferred custom domain correctly fails the local-only access boundary. The inspector port is explicit to support restricted development environments. CI retains traces on failure.

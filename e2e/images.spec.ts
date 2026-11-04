@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+test.afterEach(async({page},info)=>{if(info.status!==info.expectedStatus)console.log('Acceptance screen:',(await page.locator('body').innerText()).slice(0,4000));});
 for(const width of [390,768,1440]) test(`persistent image review at ${width}px`,async({page})=>{
  page.on('pageerror',error=>console.error('Browser application error:',error.message));
  await page.setViewportSize({width,height:900});
@@ -14,7 +15,9 @@ for(const width of [390,768,1440]) test(`persistent image review at ${width}px`,
  const image=page.getByRole('img',{name:'Design.png',exact:true});await expect(image).toBeVisible();
  await expect.poll(()=>image.evaluate((el:HTMLImageElement)=>el.naturalWidth)).toBeGreaterThan(0);
  for(let n=1;n<=5;n++){
-  const rect=await image.boundingBox();await image.click({position:{x:rect!.width*n/6,y:rect!.height*n/6}});
+  if(n===5){await page.locator('.pin-surface').focus();await page.keyboard.press('ArrowRight');await page.keyboard.press('Enter');}
+  else {const rect=await image.boundingBox();await image.click({position:{x:rect!.width*n/6,y:rect!.height*n/6}});}
+  await expect(page.getByRole('textbox',{name:'Comment',exact:true})).toBeFocused();
   await page.getByRole('textbox',{name:'Comment',exact:true}).fill(`Feedback ${n}`);
   await page.getByRole('button',{name:'Save pin',exact:true}).click();
   await expect(page.getByRole('button',{name:`Pin ${n}, open`,exact:true})).toBeVisible();
