@@ -30,6 +30,6 @@ Saved source and optional `allowed_origins` must be public HTTP(S) origins. Lite
 
 No pass/partial/fail is assigned until a real site runs through the actual proxy. Direct origin reachability and mocked unit tests are not compatibility passes. More than two failed sites requires Cameron's decision before #4. An incomplete matrix also leaves the gate open.
 
-## Current blocker
+## Current gate
 
-The repository has no remote branches or commits. The initial README push to main was rejected by automatic approval review because the requested workflow is branch/PR based. CLI Git also lacks credentials. Approving a single README seed commit through the connected GitHub app will establish main so the prepared branches and PRs can be uploaded. No production deployment, real-site pass or CI pass is claimed. Repository deployment secrets have not been set or verified.
+The approved README-only seed is on main. Foundation PR #9 and stacked proxy PR #10 are open. Production deployment, deployment secrets and the real-site matrix remain unverified. The proxy PR remains a draft until compatibility has been assessed. No production site pass is claimed.
