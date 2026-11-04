@@ -2,7 +2,7 @@ name: Check and deploy
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, "issue-*"]
 permissions:
   contents: read
 concurrency:
