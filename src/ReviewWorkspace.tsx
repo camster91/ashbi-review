@@ -25,12 +25,12 @@ export function ReviewWorkspace({ id, onBack, guestToken,userName='Cameron' }: {
   const input = useRef<HTMLTextAreaElement>(null);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; const abort = new AbortController();
-    api<ReviewData & {guest?:{name:string}}>(readPath, {}, abort.signal).then(result=>{setData(result);if(result.guest)setAuthor(result.guest.name);if(result.review.screenshot_mode){setWidth(result.review.screenshot_width??1440);setPagePath(result.review.screenshot_path??'/');}}).catch(e => { if (!abort.signal.aborted) setError(e.message); });
+    api<ReviewData & {guest?:{name:string}}>(readPath, {}, abort.signal).then(result=>{setData(result);if(result.guest)setAuthor(result.guest.name);if(result.review.screenshot_mode){setWidth(result.review.screenshot_width??1440);setPagePath(result.review.screenshot_path??'/');setShowAll(false);}}).catch(e => { if (!abort.signal.aborted) setError(e.message); });
     return () => { mounted.current = false; abort.abort(); };
   }, [id]);
   const selected = data?.pins.find(pin => pin.id === active);
   const comments = data?.comments.filter(comment => comment.pin_id === active) ?? [];
-  async function refresh() { const result = await api<ReviewData>(readPath); if (mounted.current){setData(result);if(result.review.screenshot_mode){setWidth(result.review.screenshot_width??1440);setPagePath(result.review.screenshot_path??'/');}} }
+  async function refresh() { const result = await api<ReviewData>(readPath); if (mounted.current){setData(result);if(result.review.screenshot_mode){setWidth(result.review.screenshot_width??1440);setPagePath(result.review.screenshot_path??'/');setShowAll(false);}} }
   function select(pin: Pin, scroll = false) {
     if (busy) return;
     setPending(null); setActive(pin.id); setReplyTo(null); setBody('');
