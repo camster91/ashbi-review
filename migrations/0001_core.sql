@@ -1,0 +1,10 @@
+CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE COLLATE NOCASE, name TEXT NOT NULL);
+CREATE TABLE projects (id TEXT PRIMARY KEY, client_name TEXT NOT NULL, name TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1)));
+CREATE TABLE reviews (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE, type TEXT NOT NULL CHECK(type IN ('site','image')), source_url TEXT, r2_key TEXT, share_token TEXT NOT NULL UNIQUE, expires_at INTEGER, link_enabled INTEGER NOT NULL DEFAULT 1 CHECK(link_enabled IN (0,1)), screenshot_mode INTEGER NOT NULL DEFAULT 0 CHECK(screenshot_mode IN (0,1)), CHECK((type='site' AND source_url IS NOT NULL) OR (type='image' AND r2_key IS NOT NULL)));
+CREATE TABLE pins (id TEXT PRIMARY KEY, review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE, page_path TEXT NOT NULL DEFAULT '/', x_pct REAL NOT NULL CHECK(x_pct BETWEEN 0 AND 100), y_pct REAL NOT NULL CHECK(y_pct BETWEEN 0 AND 100), selector TEXT, viewport INTEGER, scroll_y REAL DEFAULT 0, screenshot_key TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved')), number INTEGER NOT NULL, UNIQUE(review_id,number));
+CREATE TABLE comments (id TEXT PRIMARY KEY, pin_id TEXT NOT NULL REFERENCES pins(id) ON DELETE CASCADE, author_name TEXT NOT NULL, author_email TEXT, body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 10000), created_at INTEGER NOT NULL DEFAULT (unixepoch()));
+CREATE TABLE guests (id TEXT PRIMARY KEY, review_id TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE, name TEXT NOT NULL, email TEXT, token TEXT NOT NULL UNIQUE);
+CREATE INDEX reviews_project ON reviews(project_id);
+CREATE INDEX pins_review_page ON pins(review_id,page_path,viewport);
+CREATE INDEX comments_pin_created ON comments(pin_id,created_at);
+CREATE INDEX guests_review ON guests(review_id);
