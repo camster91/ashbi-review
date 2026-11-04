@@ -20,16 +20,19 @@ Saved source and optional `allowed_origins` must be public HTTP(S) origins. Lite
 
 ## Required real-site gate
 
-| Site type | Candidate | Result | Evidence needed |
-| --- | --- | --- | --- |
-| WordPress / Elementor | dellarice.com | Not tested | Deployed proxy, desktop/mobile render, links, assets, test dot |
-| Shopify | drinkmomwater.com | Not tested | Same checks, JS menus and product navigation |
-| WP Engine staging | Confirm an actual client staging URL | Not tested | Staging URL and access, then same checks |
-| Astro / static | lalalandnails.ca | Not tested | Same checks at 1440, 768 and 390 px |
-| Password-protected staging | Confirm an actual protected review URL | Not tested | Staging URL/access and complete login/cookie round trip |
-
-No pass/partial/fail is assigned until a real site runs through the actual proxy. Direct origin reachability and mocked unit tests are not compatibility passes. More than two failed sites requires Cameron's decision before #4. An incomplete matrix also leaves the gate open.
+| Site | Result | What was verified / limitation |
+| --- | --- | --- |
+| WordPress / Elementor — dellarice.com | Partial | Page, rewritten links, CSS and test pins load. Several image slots were blank in the browser despite a sampled proxy image returning valid PNG; upstream scripts report syntax/wp errors. Needs visual/resource follow-up. |
+| Shopify — drinkmomwater.com | Partial | Page and test pins load. Cart fetches, age-check and analytics scripts hit sandbox cookie/localStorage restrictions; dynamically generated URLs can leave proxy paths. |
+| WP Engine — goldfishproper.wpenginepowered.com | Partial | Page, embedded hero video and test pins load. Scripts hit sandbox localStorage/cookie restrictions. |
+| Astro/static — lalalandnails.ca | Partial | Homepage and Services & Pricing navigation work; test pins work on both pages. Visible images load. Responsive verification is pending: the viewport override did not change measured innerWidth. |
+| Password-protected Shopify staging — della-rice-1hj0pj1j.myshopify.com | Partial | Redirect to /password stays in proxy; password form and overlay load. Authentication round trip was not tested without the store password. |
+The table records limited live proof results; partial does not establish full compatibility. Direct origin reachability and mocked unit tests are not compatibility passes. More than two failed sites requires Cameron's decision before #4. An incomplete matrix also leaves the gate open.
 
 ## Current gate
 
-The approved README-only seed is on main. Foundation PR #9 and stacked proxy PR #10 are open. Production deployment, deployment secrets and the real-site matrix remain unverified. The proxy PR remains a draft until compatibility has been assessed. No production site pass is claimed.
+The approved README-only seed is on main. Foundation PR #9 and stacked proxy PR #10 are open and CI is green. The PR #10 code is deployed through Cloudflare MCP on review.ashbi.ca; DB/FILES/BROWSER and actual Workers static assets are attached. Both migrations are applied and recorded; /api/health returns ok with D1.
+
+The initial five-site live matrix is recorded on issue #3. All five are partial: four accessible pages support the test overlay; the protected Shopify staging site reaches its password form. WordPress/Shopify scripts show sandbox cookie/storage restrictions; Della has blank image slots needing follow-up. La La Land's home and Services & Pricing navigation and test dots work. A password round trip and mobile/tablet viewport checks are still unverified. The attempted viewport override did not change measured innerWidth, so no responsive pass is claimed.
+
+The proxy remains experimental; screenshot fallback is needed for script-heavy or authenticated sites. #4 remains unstarted. GitHub automatic deployment still requires CLOUDFLARE_API_TOKEN; CLOUDFLARE_ACCOUNT_ID has been added. The MCP deployment does not satisfy the automatic deployment acceptance criterion. PRs are unmerged.
