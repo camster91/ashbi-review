@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import type { Env } from './index';
+import { publicOrigin, proxyUrl } from './proxy';
+import { siteAnchor } from './site-input';
 import { isLocalOperator } from './operator';
 import { imageType, InputError, MAX_IMAGE_BYTES, readBounded } from './images';
 
-type Review = { id: string; project_id: string; type: 'image' | 'site'; name: string; r2_key: string | null };
+type Review = { id: string; project_id: string; type: 'image' | 'site'; name: string; r2_key: string | null; source_url:string; share_token:string };
 type Pin = { id: string; review_id: string; x_pct: number; y_pct: number; number: number; status: string };
 type Project = { id: string; name: string; client_name: string; archived: number };
 
@@ -86,12 +88,24 @@ reviewsApi.post('/projects/:id/reviews', async c => {
   } catch (error) { await c.env.FILES.delete(key); throw error; }
   return c.json({ review }, 201);
 });
+reviewsApi.post('/projects/:id/sites',async c=>{
+ const project=await c.env.DB.prepare('SELECT * FROM projects WHERE id=?').bind(c.req.param('id')).first<Project>();
+ if(!project)return c.json({error:'Project not found.'},404);
+ if(project.archived)return c.json({error:'Restore this project before adding a review.'},409);
+ const data=await jsonBody(c.req.raw);let source:URL;
+ try{source=publicOrigin(text(data.source_url,'Website URL',2000));}catch{throw new InputError('Enter a public website URL.');}
+ const review={id:id(),project_id:project.id,type:'site',name:text(data.name,'Review name',240)};
+ await c.env.DB.prepare("INSERT INTO reviews(id,project_id,type,source_url,share_token,name) VALUES(?,?,'site',?,?,?)").bind(review.id,project.id,source.href,id()+id(),review.name).run();
+ return c.json({review},201);
+});
 reviewsApi.get('/reviews/:id', async c => {
-  const review = await c.env.DB.prepare('SELECT id,project_id,type,name FROM reviews WHERE id=?').bind(c.req.param('id')).first<Review>();
+  const review = await c.env.DB.prepare('SELECT * FROM reviews WHERE id=?').bind(c.req.param('id')).first<Review>();
   if (!review) return c.json({ error: 'Review not found.' }, 404);
   const pins = await c.env.DB.prepare('SELECT * FROM pins WHERE review_id=? ORDER BY number').bind(review.id).all();
   const comments = await c.env.DB.prepare('SELECT comments.* FROM comments JOIN pins ON pins.id=comments.pin_id WHERE pins.review_id=? ORDER BY created_at,comments.rowid').bind(review.id).all();
-  return c.json({ review, pins: pins.results, comments: comments.results });
+  const {share_token,source_url,r2_key,...safeReview}=review;
+  const frame_url=review.type==='site'?proxyUrl(new URL(source_url),`/p/${review.id}/${share_token}/`):undefined;
+  return c.json({ review:{...safeReview,source_url,frame_url}, pins: pins.results, comments: comments.results });
 });
 reviewsApi.get('/reviews/:id/image', async c => {
   const review = await c.env.DB.prepare("SELECT r2_key FROM reviews WHERE id=? AND type='image'").bind(c.req.param('id')).first<Review>();
@@ -101,16 +115,17 @@ reviewsApi.get('/reviews/:id/image', async c => {
   return new Response(file.body, { headers: { 'Content-Type': file.httpMetadata?.contentType ?? 'application/octet-stream', 'Content-Length': String(file.size), 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store', 'Content-Security-Policy': "default-src 'none'; sandbox" } });
 });
 reviewsApi.post('/reviews/:id/pins', async c => {
-  const review = await c.env.DB.prepare("SELECT id FROM reviews WHERE id=? AND type='image'").bind(c.req.param('id')).first<{id:string}>();
-  if (!review) return c.json({ error: 'Image review not found.' }, 404);
+  const review = await c.env.DB.prepare("SELECT id,type FROM reviews WHERE id=?").bind(c.req.param('id')).first<{id:string;type:string}>();
+  if (!review) return c.json({ error: 'Review not found.' }, 404);
   const data = await jsonBody(c.req.raw);
   for (const value of [data.x_pct, data.y_pct]) if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) throw new InputError('Pin coordinates must be between 0 and 100.');
+  const anchor=review.type==='site'?siteAnchor(data):null;
   const body = text(data.body, 'Comment', 10000);
   const author = text(data.author_name, 'Name', 120);
   const pinId = id();
   // Number allocation and insertion happen in one SQL statement, avoiding a read/increment race.
   await c.env.DB.batch([
-    c.env.DB.prepare("INSERT INTO pins(id,review_id,x_pct,y_pct,number) SELECT ?,?,?,?,COALESCE(MAX(number),0)+1 FROM pins WHERE review_id=?").bind(pinId, review.id, data.x_pct, data.y_pct, review.id),
+    c.env.DB.prepare("INSERT INTO pins(id,review_id,x_pct,y_pct,page_path,selector,viewport,scroll_y,page_x_pct,page_y_pct,number) SELECT ?,?,?,?,?,?,?,?,?,?,COALESCE(MAX(number),0)+1 FROM pins WHERE review_id=?").bind(pinId,review.id,data.x_pct,data.y_pct,anchor?.page_path??'/',anchor?.selector??null,anchor?.viewport??null,anchor?.scroll_y??0,anchor?.page_x_pct??null,anchor?.page_y_pct??null,review.id),
     c.env.DB.prepare('INSERT INTO comments(id,pin_id,author_name,body) VALUES(?,?,?,?)').bind(id(), pinId, author, body)
   ]);
   const pin = await c.env.DB.prepare('SELECT * FROM pins WHERE id=?').bind(pinId).first<Pin>();

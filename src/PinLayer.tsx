@@ -1,11 +1,8 @@
 import { useRef, useState } from 'react';
 import type { Pin } from './api';
 
-export type Point = { x_pct: number; y_pct: number };
-export function percentagePoint(clientX: number, clientY: number, rect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>): Point {
-  const clamp = (n: number) => Math.max(0, Math.min(100, n));
-  return { x_pct: clamp((clientX - rect.left) / rect.width * 100), y_pct: clamp((clientY - rect.top) / rect.height * 100) };
-}
+import { percentagePoint, type Point } from '../shared/pins';
+export { percentagePoint, type Point } from '../shared/pins';
 
 /** Positions are percentages of the image surface, independent of rendered size. */
 export function PinLayer({ src, name, pins, activeId, pending, onSelect, onCreate }: {
