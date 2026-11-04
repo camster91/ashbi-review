@@ -2,12 +2,12 @@ name: Check and deploy
 on:
   pull_request:
   push:
-    branches: [main, "issue-*"]
+    branches: [main]
 permissions:
   contents: read
 concurrency:
   group: ashbi-review-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: ubuntu-latest
