@@ -9,9 +9,9 @@ test('website pins survive reload, content shifts, page and width filters',async
  await page.getByRole('button',{name:'Comment',exact:true}).click();await frame.locator('#headline').click();
  await page.getByRole('textbox',{name:'Comment',exact:true}).fill('Persistent website feedback');await page.getByRole('button',{name:'Save pin',exact:true}).click();
  await expect(frame.getByRole('button',{name:'Pin 1, open',exact:true})).toBeVisible();
- const before=await frame.getByRole('button',{name:'Pin 1, open'}).boundingBox();
+ const before=await frame.getByRole('button',{name:'Pin 1, open'}).boundingBox();const elementBefore=await frame.locator('#headline').boundingBox();
  shifted=true;await page.reload();await expect(frame.getByRole('button',{name:'Pin 1, open',exact:true})).toBeVisible();
- const after=await frame.getByRole('button',{name:'Pin 1, open'}).boundingBox();expect(after!.y-before!.y).toBeCloseTo(80,0);
+ const after=await frame.getByRole('button',{name:'Pin 1, open'}).boundingBox();const elementAfter=await frame.locator('#headline').boundingBox();expect(elementAfter!.y-elementBefore!.y).toBeGreaterThan(70);expect(after!.y-elementAfter!.y).toBeCloseTo(before!.y-elementBefore!.y,0);
  await page.getByRole('combobox',{name:'Width',exact:true}).selectOption('390');await expect(frame.getByRole('button',{name:'Pin 1, open'})).toHaveCount(0);
  expect(await frame.locator('body').evaluate(()=>innerWidth)).toBe(390);
  await page.getByLabel('Show all pages and widths').check();await expect(frame.getByRole('button',{name:'Pin 1, open'})).toBeVisible();
