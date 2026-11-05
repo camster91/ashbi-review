@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect,localHeaders } from './local';
 test.afterEach(async({page},info)=>{if(info.status!==info.expectedStatus)console.log('Acceptance screen:',(await page.locator('body').innerText()).slice(0,4000));});
 for(const width of [390,768,1440]) test(`persistent image review at ${width}px`,async({page})=>{
  page.on('pageerror',error=>console.error('Browser application error:',error.message));
  await page.setViewportSize({width,height:900});
- const ready=await page.request.get('/api/projects');
+ const ready=await page.request.get('/api/projects',{headers:localHeaders});
  expect(ready.status(),await ready.text()).toBe(200);
  await page.goto('/');
  await expect(page.getByRole('heading',{name:'Projects',exact:true})).toBeVisible();

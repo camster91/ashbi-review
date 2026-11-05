@@ -1,6 +1,6 @@
 # Image reviews — issue #4 development checkpoint
 
-The internal dashboard API supports client-grouped projects, rename/archive/restore, private R2 image uploads, numbered image pins, threaded comments, and resolve/reopen. The React dashboard now includes client-grouped projects, upload controls, an image pin layer, threaded sidebar, status filters and sidebar-to-pin navigation. It is **not deployed**; complete local Worker/browser acceptance remains pending.
+The internal dashboard API supports client-grouped projects, rename/archive/restore, private R2 image uploads, numbered image pins, threaded comments, and resolve/reopen. The React dashboard now includes client-grouped projects, upload controls, an image pin layer, threaded sidebar, status filters and sidebar-to-pin navigation. It is **not deployed**. Actual dashboard acceptance passed in CI run 41884534289 at 390/768/1440 px: upload, five pins including keyboard placement, threaded reply, resolve two, reload and status filters.
 
 ## Access boundary until #6
 
@@ -28,12 +28,12 @@ Migration `0003_image_reviews.sql` adds review names and comment parent IDs; it 
 
 ## Evidence and remaining work
 
-40 combined Workers tests pass. The API workflow test uploads a real PNG, inserts five sequential pins, replies, resolves two and retrieves the persisted state. Concurrent creation produces unique pin numbers. Access isolation, private image reads, unsupported/spoofed formats, bounded streams, oversized requests, archive handling, field validation and cross-review reply rejection are covered. This is server-side evidence, not dashboard or mobile acceptance.
+40 combined Workers tests pass. The API workflow test uploads a real PNG, inserts five sequential pins, replies, resolves two and retrieves the persisted state. Concurrent creation produces unique pin numbers. Access isolation, private image reads, unsupported/spoofed formats, bounded streams, oversized requests, archive handling, field validation and cross-review reply rejection are covered. This API evidence is supplemented by the actual Chromium dashboard acceptance below.
 
 The dashboard implements these controls, loading/empty/error states, and keyboard pin placement with arrow keys and Enter. Vite development proxying reads a server-only DEV_OPERATOR_TOKEN from ignored .env.local; use the same local key in .dev.vars. The key is not exposed as a Vite client variable or included in the production bundle.
 
 Browser Rendering rendered a synthetic fixture with one visible open pin and two threaded comments at measured widths 390, 768 and 1440, with document scrollWidth equal to innerWidth at all three. A mobile screenshot was visually inspected. These checks use mocked API data and an inline sample image; they do not establish an actual upload/save/reload flow or assistive-technology conformance.
 
-Next: verify the five-pin/two-resolve flow through the actual dashboard at 390/768/1440 px; confirm measured viewport dimensions. Keep issue #4 acceptance checkboxes unchecked until that flow is verified. Do not start #5 before #4's reusable layer exists. No production deployment or merge is authorised by this checkpoint.
+Image acceptance is verified and issue #4 implementation checkboxes are complete. PR #11 is ready for review. The shared feedback layer is now used by website PR #12, and #13 adds guest/operator access. See issues #1/#6/#7 and docs/RELEASE.md for current release blockers; no merge or deployment is authorised by this checkpoint.
 
-Automated integration checks: `npx playwright install chromium && npm run test:e2e` starts local D1/R2/Worker and Vite, then uses real browser controls at 390/768/1440 px. The test asserts the private API is available before opening the dashboard, preventing a failed local auth setup from masquerading as a UI timeout. Wrangler must preserve the local request origin (`--infer-origin-from-routes false`); its default inferred custom domain correctly fails the local-only access boundary. The inspector port is explicit to support restricted development environments. CI retains traces on failure.
+Automated integration checks: `npx playwright install chromium && npm run test:e2e` starts local D1/R2 and serves the production-built dashboard/API from one Worker, then uses real browser controls at 390/768/1440 px. The test asserts the private API is available before opening the dashboard, preventing a failed local auth setup from masquerading as a UI timeout. Wrangler must preserve the local request origin (`--infer-origin-from-routes false`); its default inferred custom domain correctly fails the local-only access boundary. The inspector port is explicit to support restricted development environments. CI retains traces on failure.

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from './index';
-import { overlayScript } from './test-overlay';
+import { siteOverlay } from './site-overlay';
 
 interface Review { id: string; source_url: string; share_token: string; expires_at: number | null; screenshot_mode: number; link_enabled: number; allowed_origins: string }
 // A review's saved source and explicitly saved resource origins are the only destinations.
@@ -115,6 +115,6 @@ proxy.all('/:reviewId/:token/*',async c=>{
     el.removeAttribute('integrity');
   }}).on('style',{element(){styleText='';},text(chunk){styleText+=chunk.text;chunk.remove();if(chunk.lastInTextNode){chunk.after(rewriteCss(styleText,rewrite),{html:true});styleText='';}}})
     .on('head',{element(el){el.prepend(`<base href="${proxyUrl(target,prefix).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">`,{html:true});}})
-    .onDocument({end(end){end.append(`<script>${overlayScript}</script>`,{html:true});}});
+    .onDocument({end(end){end.append(`<script>${siteOverlay(incoming.origin)}</script>`,{html:true});}});
   return rewriter.transform(response);
 });

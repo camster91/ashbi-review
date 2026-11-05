@@ -1,6 +1,6 @@
 export type Project = { id: string; client_name: string; name: string; archived: number };
-export type Review = { id: string; project_id: string; type: 'image' | 'site'; name: string };
-export type Pin = { id: string; number: number; x_pct: number; y_pct: number; status: 'open' | 'resolved' };
+export type Review = { id: string; project_id: string; type: 'image' | 'site'; name: string; source_url?:string; frame_url?:string;screenshot_mode?:number;screenshot_width?:number|null;screenshot_path?:string|null;captured_at?:number|null;capture_version?:string|null };
+export type Pin = { id: string; number: number; x_pct: number; y_pct: number; status: 'open' | 'resolved';page_path:string;selector:string|null;viewport:number|null;scroll_y:number;page_x_pct:number|null;page_y_pct:number|null;screenshot_key?:string|null;screenshot_status?:string };
 export type Comment = { id: string; pin_id: string; parent_id: string | null; author_name: string; body: string; created_at: number };
 export type ReviewData = { review: Review; pins: Pin[]; comments: Comment[] };
 export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }

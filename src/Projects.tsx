@@ -14,6 +14,8 @@ export function Projects({ onReview }: { onReview: (id: string) => void }) {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   const [client, setClient] = useState('');
+  const [siteUrl,setSiteUrl]=useState('');
+  const [siteName,setSiteName]=useState('');
   const [name, setName] = useState('');
   const upload = useRef<HTMLInputElement>(null);
   const active = projects.find(project => project.id === selected);
@@ -50,6 +52,11 @@ export function Projects({ onReview }: { onReview: (id: string) => void }) {
     try { const result = await api<{review: Review}>(`/projects/${active.id}/reviews`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-File-Name': encodeURIComponent(file.name) }, body: file }); onReview(result.review.id); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); if (upload.current) upload.current.value = ''; }
   }
+  async function addSite(){
+    if(!active||busy)return;setBusy(true);setError('');
+    try{const result=await api<{review:Review}>(`/projects/${active.id}/sites`,json('POST',{source_url:siteUrl,name:siteName}));onReview(result.review.id);}
+    catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  }
   const visible = projects.filter(project => showArchived || !project.archived);
   const clients = [...new Set(visible.map(project => project.client_name))];
   return <>
@@ -63,6 +70,7 @@ export function Projects({ onReview }: { onReview: (id: string) => void }) {
       </aside><section className="review-list" aria-label="Project reviews">{!active ? <div className="empty-state"><h2>A little clarity for every project.</h2><p>Choose a project or create one, then upload a design to start a review.</p></div> : <>
         <div className="project-heading"><div><p className="eyebrow">{active.client_name}</p><h2>{active.name}</h2></div><div className="form-actions"><button className="secondary" disabled={busy} onClick={() => { setEditing(true); setCreating(false); setClient(active.client_name); setName(active.name); }}>Edit</button><button className="secondary" disabled={busy} onClick={() => void archive()}>{active.archived ? 'Restore' : 'Archive'}</button></div></div>
         {!active.archived && <div className="upload-box"><label htmlFor="image-upload">Upload a design</label><p>PNG, JPG or WebP · Up to 25 MB</p><input ref={upload} id="image-upload" type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={e => void uploadImage(e.target.files?.[0])}/>{busy && <p role="status">Saving…</p>}</div>}
+        {!active.archived&&<form className="project-form" onSubmit={e=>{e.preventDefault();void addSite();}}><h3>Review a website</h3><label>Website URL<input type="url" required value={siteUrl} onChange={e=>setSiteUrl(e.target.value)} placeholder="https://client.example.com" disabled={busy}/></label><label>Review name<input required maxLength={240} value={siteName} onChange={e=>setSiteName(e.target.value)} disabled={busy}/></label><button disabled={busy||!siteUrl||!siteName}>Add website</button></form>}
         {reviewLoading ? <p role="status">Loading reviews…</p> : !reviews.length ? <p className="muted">No reviews in this project yet.</p> : <ul className="review-cards">{reviews.map(review => <li key={review.id}><button onClick={() => onReview(review.id)} disabled={busy}><span className="review-kind">{review.type === 'image' ? 'IMAGE' : 'WEBSITE'}</span><strong>{review.name}</strong><span>Open review ↗</span></button></li>)}</ul>}
       </>}</section></div>
     </>}
