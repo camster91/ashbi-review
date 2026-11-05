@@ -19,18 +19,30 @@ export async function captureReview(env:Env,id:string,path:string,width:number){
  try{await env.DB.prepare('UPDATE reviews SET screenshot_mode=1,screenshot_key=?,screenshot_width=?,screenshot_path=?,captured_at=unixepoch() WHERE id=?').bind(key,width,path,id).run();}catch(error){await env.FILES.delete(key);throw error;}
  return key;
 }
-export async function capturePin(env:Env,pinId:string){
- const pin=await env.DB.prepare('SELECT * FROM pins WHERE id=?').bind(pinId).first<{id:string;review_id:string;page_path:string;viewport:number}>();if(!pin)return false;
- const review=await env.DB.prepare("SELECT * FROM reviews WHERE id=? AND type='site'").bind(pin.review_id).first<CaptureReview>();if(!review)return false;
- let key:string|null=null,created=false;
+export async function capturePin(env:Env,pinId:string,allowRendering=true){
+ const pin=await env.DB.prepare('SELECT review_id,page_path,viewport,selector,screenshot_key FROM pins WHERE id=?').bind(pinId).first<{review_id:string;page_path:string;viewport:number;selector:string|null;screenshot_key:string|null}>();
+ if(!pin)return false;
+ if(pin.screenshot_key)return true;
+ const review=await env.DB.prepare("SELECT * FROM reviews WHERE id=? AND type='site'").bind(pin.review_id).first<CaptureReview>();
+ if(!review)return false;
+ let key:string|undefined;
  try{
-  if(review.screenshot_mode&&review.screenshot_key&&review.screenshot_path===pin.page_path&&review.screenshot_width===pin.viewport)key=review.screenshot_key;
-  else{key=await capture(env,review,pin.page_path,pin.viewport);created=true;}
-  await env.DB.prepare("UPDATE pins SET screenshot_key=?,screenshot_status='saved' WHERE id=?").bind(key,pin.id).run();return true;
- }catch(error){if(key&&created)await env.FILES.delete(key);await env.DB.prepare("UPDATE pins SET screenshot_status='failed' WHERE id=?").bind(pin.id).run();console.error('Pin capture failed',{name:(error as Error).name});return false;}
+  // Older snapshot pins without a saved key have no recoverable capture version.
+  if(allowRendering&&pin.selector){
+   key=await capture(env,review,pin.page_path,pin.viewport);
+   const updated=await env.DB.prepare("UPDATE pins SET screenshot_key=?,screenshot_status='saved' WHERE id=? AND screenshot_key IS NULL").bind(key,pinId).run();
+   if(!updated.meta.changes)await env.FILES.delete(key);
+   return true;
+  }
+ }catch(error){
+  if(key)await env.FILES.delete(key);
+  console.error('Pin capture failed',{name:(error as Error).name});
+ }
+ await env.DB.prepare("UPDATE pins SET screenshot_status='failed' WHERE id=? AND screenshot_key IS NULL").bind(pinId).run();
+ const saved=await env.DB.prepare('SELECT screenshot_key FROM pins WHERE id=?').bind(pinId).first<{screenshot_key:string|null}>();
+ return !!saved?.screenshot_key;
 }
 
-// Browser Run Quick Actions do not run in local emulation. Keep local feedback
-// usable and expose capture failure rather than leaving an unsupported RPC pending.
+// Browser Run Quick Actions do not run in local emulation.
 export function localCapture(url:string){return ['localhost','127.0.0.1'].includes(new URL(url).hostname);}
-export async function captureForRequest(env:Env,pinId:string,url:string){if(localCapture(url)){const snapshot=await env.DB.prepare('SELECT r.screenshot_key FROM pins p JOIN reviews r ON r.id=p.review_id WHERE p.id=? AND r.screenshot_mode=1 AND r.screenshot_key IS NOT NULL AND p.page_path=r.screenshot_path AND p.viewport=r.screenshot_width').bind(pinId).first();if(snapshot)return capturePin(env,pinId);await env.DB.prepare("UPDATE pins SET screenshot_status='failed' WHERE id=?").bind(pinId).run();return false;}return capturePin(env,pinId);}
+export function captureForRequest(env:Env,pinId:string,url:string){return capturePin(env,pinId,!localCapture(url));}

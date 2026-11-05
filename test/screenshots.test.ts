@@ -18,3 +18,50 @@ it('capture failures leave persistent feedback intact and can be retried',async(
  const failed={...env,BROWSER:{quickAction:async()=>new Response('unavailable',{status:503})}};expect(await capturePin(failed,pin!.id)).toBe(false);expect((await env.DB.prepare('SELECT screenshot_status FROM pins WHERE id=?').bind(pin!.id).first())!.screenshot_status).toBe('failed');expect((await env.DB.prepare('SELECT body FROM comments WHERE pin_id=?').bind(pin!.id).first())!.body).toBe('Do not lose this feedback');
  const success={...env,BROWSER:{quickAction:async()=>new Response(png)}};expect(await capturePin(success,pin!.id)).toBe(true);expect((await env.DB.prepare('SELECT screenshot_status FROM pins WHERE id=?').bind(pin!.id).first())!.screenshot_status).toBe('saved');
 });
+it('keeps the validated snapshot through a refresh, delayed processing and retries',async()=>{
+ const review=await fixture();
+ const quickAction=vi.fn(async()=>new Response(png));
+ const runtime={...env,BROWSER:{quickAction}};
+ const original=await captureReview(runtime,review.id,'/',390);
+ const saved=await env.DB.prepare('SELECT * FROM reviews WHERE id=?').bind(review.id).first<typeof review>();
+ const version=original.split('/').at(-1);
+ const pin=await createPin(runtime,saved!,{x_pct:25,y_pct:40,body:'Original feedback',capture_version:version},{name:'Guest'});
+ expect(pin).toMatchObject({screenshot_key:original,screenshot_status:'saved'});
+
+ const refreshed=await captureReview(runtime,review.id,'/',390);
+ expect(refreshed).not.toBe(original);
+ expect(await capturePin(runtime,pin!.id)).toBe(true);
+ expect(await capturePin(runtime,pin!.id,false)).toBe(true);
+ expect(quickAction).toHaveBeenCalledTimes(2);
+ expect(await env.DB.prepare('SELECT screenshot_key FROM pins WHERE id=?').bind(pin!.id).first()).toMatchObject({screenshot_key:original});
+ expect((await SELF.fetch(`http://localhost/api/reviews/${review.id}/snapshot?v=${version}`,{headers})).status).toBe(404);
+ expect((await SELF.fetch(`http://localhost/api/pins/${pin!.id}/screenshot`,{headers})).status).toBe(200);
+
+ // Simulate feedback written before the fix whose original key was never saved.
+ await env.DB.prepare("UPDATE pins SET screenshot_key=NULL,screenshot_status='pending' WHERE id=?").bind(pin!.id).run();
+ expect(await capturePin(runtime,pin!.id)).toBe(false);
+ expect(await env.DB.prepare('SELECT screenshot_key,screenshot_status FROM pins WHERE id=?').bind(pin!.id).first()).toMatchObject({screenshot_key:null,screenshot_status:'failed'});
+ expect(await env.DB.prepare('SELECT body FROM comments WHERE pin_id=?').bind(pin!.id).first()).toMatchObject({body:'Original feedback'});
+ expect(quickAction).toHaveBeenCalledTimes(2);
+});
+
+it('keeps a live pin capture stable when a delayed attempt overlaps a successful retry',async()=>{
+ const review=await fixture();
+ const pin=await createPin(env,review,{x_pct:10,y_pct:20,page_x_pct:10,page_y_pct:20,page_path:'/',selector:'#hero',viewport:768,scroll_y:0,body:'Live feedback'},{name:'QA'});
+ const success={...env,BROWSER:{quickAction:async()=>new Response(png)}};
+ const snapshot=await captureReview(success,review.id,'/',768);
+ let markStarted!:()=>void;
+ const started=new Promise<void>(resolve=>{markStarted=resolve;});
+ let finish!:(response:Response)=>void;
+ const response=new Promise<Response>(resolve=>{finish=resolve;});
+ const delayed=capturePin({...env,BROWSER:{quickAction:()=>{markStarted();return response;}}},pin!.id);
+ await started;
+ expect(await capturePin(success,pin!.id)).toBe(true);
+ const readPin=()=>env.DB.prepare('SELECT screenshot_key,screenshot_status FROM pins WHERE id=?').bind(pin!.id).first();
+ const winning=await readPin();
+ expect(winning).toMatchObject({screenshot_key:expect.any(String),screenshot_status:'saved'});
+ expect(winning?.screenshot_key).not.toBe(snapshot);
+ finish(new Response(png));
+ expect(await delayed).toBe(true);
+ expect(await readPin()).toEqual(winning);
+});

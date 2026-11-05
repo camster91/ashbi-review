@@ -7,26 +7,26 @@ export { percentagePoint, type Point } from '../shared/pins';
 /** Positions are percentages of the image surface, independent of rendered size. */
 export function PinLayer({ src, name, pins, activeId, pending, onSelect, onCreate }: {
   src: string; name: string; pins: Pin[]; activeId: string | null; pending: Point | null;
-  onSelect: (pin: Pin) => void; onCreate: (point: Point) => void;
+  onSelect: (pin: Pin) => void; onCreate?: (point: Point) => void;
 }) {
   const image = useRef<HTMLImageElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [cursor, setCursor] = useState<Point | null>(null);
   return <div className="canvas-scroll">
-    <p className="canvas-help" id="pin-help">Click the image to leave a pin. Keyboard: focus the image, use arrow keys, then Enter.</p>
+    <p className="canvas-help" id="pin-help">{onCreate?'Click the image to leave a pin. Keyboard: focus the image, use arrow keys, then Enter.':'Saved capture for this feedback.'}</p>
     {failed && <p role="alert">This image could not load. Reload the review to try again.</p>}
     {!loaded && !failed && <p role="status">Loading image…</p>}
-    <div className="pin-surface" role="group" aria-label={`Review image: ${name}`} aria-describedby="pin-help" tabIndex={0}
-      onFocus={e => { if (e.target === e.currentTarget) setCursor({ x_pct: 50, y_pct: 50 }); }}
+    <div className="pin-surface" role="group" aria-label={`Review image: ${name}`} aria-describedby="pin-help" tabIndex={onCreate?0:undefined}
+      onFocus={e => { if (onCreate && e.target === e.currentTarget) setCursor({ x_pct: 50, y_pct: 50 }); }}
       onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setCursor(null); }}
       onClick={e => {
-        if (!loaded || (e.target as Element).closest('button')) return;
+        if (!onCreate || !loaded || (e.target as Element).closest('button')) return;
         const rect = image.current?.getBoundingClientRect();
         if (rect && rect.width && rect.height) onCreate(percentagePoint(e.clientX, e.clientY, rect));
       }}
       onKeyDown={e => {
-        if (e.target !== e.currentTarget || !loaded) return;
+        if (!onCreate || e.target !== e.currentTarget || !loaded) return;
         const point = cursor ?? { x_pct: 50, y_pct: 50 };
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCreate(point); }
         else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {

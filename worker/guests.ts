@@ -33,5 +33,5 @@ guestsApi.post('/:reviewId/:token/pins/:pinId/comments',async c=>{
  const comment=await createReply(c.env,pin.id,await jsonBody(c.req.raw),{name:guest.name,email:guest.email,notify:true});return c.json({comment},201);
 });
 
-guestsApi.get('/:reviewId/:token/snapshot',async c=>{const review=c.get('review');return review.screenshot_key?imageResponse(c.env,review.screenshot_key):c.json({error:'Capture not found.'},404);});
+guestsApi.get('/:reviewId/:token/snapshot',async c=>{const review=c.get('review');const version=c.req.query('v');return review.screenshot_key&&(version===undefined||version===review.screenshot_key.split('/').at(-1))?imageResponse(c.env,review.screenshot_key):c.json({error:'Capture not found.'},404);});
 guestsApi.get('/:reviewId/:token/pins/:pinId/screenshot',async c=>{const pin=await c.env.DB.prepare('SELECT screenshot_key FROM pins WHERE id=? AND review_id=?').bind(c.req.param('pinId'),c.get('review').id).first<{screenshot_key:string|null}>();return pin?.screenshot_key?imageResponse(c.env,pin.screenshot_key):c.json({error:'Capture not found.'},404);});
