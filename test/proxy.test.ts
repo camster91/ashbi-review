@@ -38,6 +38,21 @@ describe('rewriter',()=>{
   it('keeps encoded CSS URLs stable',()=>{expect(rewriteCss('url("data:image/png;base64,AAAA")',x=>x)).toBe('url("data:image/png;base64,AAAA")');});
   it('rewrites only saved external resource origins',async()=>{await env.DB.prepare('UPDATE reviews SET allowed_origins=?').bind(JSON.stringify(['https://cdn.example.com'])).run();vi.spyOn(globalThis,'fetch').mockImplementation(async()=>new Response('<img src="https://cdn.example.com/a.jpg"><a href="https://unsaved.example.com/">External</a>',{headers:{'content-type':'text/html'}}));const html=await(await request()).text();expect(html).toContain(prefix+originKey('https://cdn.example.com')+'/a.jpg');expect(html).toContain('href="https://unsaved.example.com/"');});
   it('rewrites same-origin redirects and blocks unsaved redirects',async()=>{const mock=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>new Response(null,{status:302,headers:{location:'/login'}}));const r=await request(url,{redirect:'manual'});expect(r.headers.get('location')).toBe(prefix+key+'/login');mock.mockImplementation(async()=>new Response(null,{status:302,headers:{location:'https://unsaved.example.com/login'}}));expect((await request(url,{redirect:'manual'})).status).toBe(409);});
+  it('allows a saved HTTP site to upgrade to HTTPS on the same host',async()=>{
+    const http='http://client.example.com';
+    await env.DB.prepare('UPDATE reviews SET source_url=?').bind(http+'/about/').run();
+    const fetchSite=vi.spyOn(globalThis,'fetch').mockImplementationOnce(async()=>new Response(null,{status:301,headers:{location:origin+'/about/'}})).mockImplementationOnce(async()=>new Response('Secure site'));
+    const redirected=await request(url.replace(key,originKey(http)),{redirect:'manual'});
+    expect(redirected.status).toBe(301);
+    expect(redirected.headers.get('location')).toBe(prefix+key+'/about/');
+    expect(await (await request()).text()).toBe('Secure site');
+    expect(String(fetchSite.mock.calls.at(-1)?.[0])).toBe(origin+'/about/');
+    fetchSite.mockImplementationOnce(async()=>new Response(null,{status:302,headers:{location:'https://other.example.com/'}}));
+    const blocked=await request(url,{redirect:'manual'});
+    expect(blocked.status).toBe(409);
+    expect(await blocked.text()).toContain('ashbi:preview-error');
+    expect(blocked.headers.get('content-security-policy')).toContain("frame-ancestors 'self'");
+  });
   it('scopes Set-Cookie to review and origin, restoring original names upstream',async()=>{const mock=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>new Response('ok',{headers:{'set-cookie':'__Host-session=secret; Path=/; Domain=client.example.com; Secure; SameSite=None; Max-Age=300'}}));const r=await request();const cookie=r.headers.get('set-cookie')!;expect(cookie).toContain(`Path=${prefix}${key}/`);expect(cookie).not.toContain('Domain=');expect(cookie).toContain('HttpOnly');expect(cookie).toContain('Max-Age=300');await request(url,{headers:{cookie:cookie.split(';')[0]+'; session=app-secret'}});expect(new Headers(mock.mock.calls[1][1]!.headers).get('cookie')).toBe('__Host-session=secret');});
   it('does not cache private HTML or forward origin security side effects',async()=>{vi.spyOn(globalThis,'fetch').mockImplementation(async()=>new Response('ok',{headers:{'clear-site-data':'"*"','service-worker-allowed':'/','refresh':'0;url=https://evil.example.com','cache-control':'public, max-age=3600'}}));const r=await request();for(const key of ['clear-site-data','service-worker-allowed','refresh'])expect(r.headers.has(key)).toBe(false);expect(r.headers.get('cache-control')).toBe('no-store');});
   it('preserves query strings without interpreting URL parameters as destinations',async()=>{const mock=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>new Response('ok'));await request(url+'?url=https://other.example.com&x=1');expect(String(mock.mock.calls[0][0])).toBe(origin+'/about/?url=https://other.example.com&x=1');});
