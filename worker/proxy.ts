@@ -61,6 +61,8 @@ proxy.all('/:reviewId/:token/*',async c=>{
   let source:URL; let allowed:Set<string>;
   try { source=publicOrigin(review.source_url); allowed=new Set([source.origin,...(JSON.parse(review.allowed_origins) as string[]).map(x=>publicOrigin(x).origin)]); }
   catch { return c.text('Invalid saved source',422); }
+  // Permit only the standard HTTPS upgrade of the same saved HTTP host.
+  if(source.protocol==='http:'&&!source.port)allowed.add(`https://${source.hostname}`);
   const prefix=`/p/${encodeURIComponent(reviewId)}/${encodeURIComponent(token)}/`;
   const incoming=new URL(c.req.url);
   const rest=incoming.pathname.slice(prefix.length);
@@ -94,7 +96,12 @@ proxy.all('/:reviewId/:token/*',async c=>{
   const location=upstream.headers.get('location');
   if(location){
     let destination:URL;try{destination=publicOrigin(new URL(location,target).href);}catch{return c.text('Invalid origin redirect',502);}
-    if(!allowed.has(destination.origin))return c.text('Redirect leaves the saved review origins. Save the destination origin or use screenshot mode.',409);
+    if(!allowed.has(destination.origin)){
+      const message='Redirect leaves the saved review origins. Save the destination origin or use screenshot mode.';
+      return new Response(`<!doctype html><p>${message}</p><script>parent.postMessage({type:'ashbi:preview-error',reason:'redirect'},${JSON.stringify(incoming.origin)})</script>`,{
+        status:409,headers:safeHeaders(new Headers({'content-type':'text/html; charset=utf-8'}))
+      });
+    }
     headers.set('location',proxyUrl(destination,prefix));
   }
   const type=headers.get('content-type')??'';
