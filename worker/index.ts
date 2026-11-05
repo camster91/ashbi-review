@@ -4,7 +4,7 @@ import {guestsApi} from './guests';
 import {authApi} from './auth';
 import {sendCommentDigest} from './email';
 import { reviewsApi } from './reviews';
-export interface Env { DB: D1Database; FILES: R2Bucket; BROWSER: Pick<BrowserRun,'quickAction'>; ASSETS: Fetcher; DEV_OPERATOR_TOKEN?: string; RESEND_API_KEY?:string; EMAIL_FROM?:string;APP_ORIGIN?:string }
+export interface Env { DB: D1Database; FILES: R2Bucket; BROWSER: Pick<BrowserRun,'quickAction'>; ASSETS: Fetcher; DEV_OPERATOR_TOKEN?: string; EMAIL?:SendEmail; EMAIL_FROM?:string;APP_ORIGIN?:string }
 const app = new Hono<{ Bindings: Env }>();
 app.route('/p', proxy);
 app.all('/p/*', c => c.text('Review unavailable', 404));

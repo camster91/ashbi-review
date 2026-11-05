@@ -6,8 +6,8 @@ Stacked PRs: #9 foundation → #10 proxy → #11 images → #12 website pins →
 
 ## Cameron actions before live acceptance
 
-- Add repository secret CLOUDFLARE_API_TOKEN. CLOUDFLARE_ACCOUNT_ID is already present.
-- Configure a Resend-verified sender and Worker secrets RESEND_API_KEY and EMAIL_FROM. Never put values in issues, PRs or commits.
+- Connect the existing Worker to GitHub through Cloudflare Workers Builds. Use main only, build with `npm run check && npm test && npm run build`, and deploy with `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy`. The Cloudflare build token needs Worker deployment and D1 write access. GitHub Actions runs checks.
+- Confirm Cameron and Bianca are verified Cloudflare Email Routing destinations and that `review@ashbi.ca` can send via the Worker email binding. Keep the existing inbound mail setup.
 - Explicitly approve the reviewed merges and new production deployment/migrations. No code here authorises itself to merge or deploy.
 - Supply the protected Shopify staging password/access if that authentication round trip must be verified. Browser captures may still be blocked by bot protection or show a password wall.
 - Approve an inventory/migration of active MarkUp reviews and, after acceptance, cancellation. Neither operation has been performed.
@@ -16,7 +16,7 @@ DNS/custom domain are already provisioned on Cameron's Cloudflare account. No ne
 
 ## Live acceptance after approved release
 
-1. Verify the actual push-to-main Action applied remote D1 migrations before deploying; /api/health reads D1, and dashboard/API/assets share the Worker. Check deployed binding/secret names and Cron trigger.
+1. Verify the push-to-main Cloudflare build applied remote D1 migrations before deploying; /api/health reads D1, and dashboard/API/assets share the Worker. Check deployed binding/secret names and Cron trigger.
 2. Request separate Cameron and Bianca magic links. Verify each real inbox, single use, sign-out and dashboard protection.
 3. Upload a real PNG/JPG/WebP (and reject >25 MB), create/share a review, and use a fresh phone session to enter a name, pin/reply/reload. Reply and resolve as operator; confirm guests cannot resolve or access projects. Turn the share link off and verify access is revoked.
 4. Verify one real email digest reaches both operators after the next 15-minute interval, no duplicate in a quiet interval, and new comments remain queued until their next digest.
@@ -26,4 +26,4 @@ DNS/custom domain are already provisioned on Cameron's Cloudflare account. No ne
 
 ## Recovery
 
-Code rollback uses a revert PR and the normal Action. Preserve D1/R2 and forward-repair additive migrations. Review/comment capture failures show a retry state; saved comments and notification queues survive. Email retries use durable frozen payloads and Resend idempotency (24-hour provider window); reconcile prolonged uncertain sends before manual retry. Retain old capture objects because existing pins may reference them.
+Code rollback uses a revert PR and the normal Cloudflare build. Preserve D1/R2 and forward-repair additive migrations. Review/comment capture failures show a retry state; saved comments and notification queues survive. Email retries reuse durable frozen payloads on explicit rate-limit rejection. A delivery with an unknown outcome remains held with its queue intact. Check both inboxes and Cloudflare email activity before marking it delivered or resetting its lease. Retain old capture objects because existing pins may reference them.

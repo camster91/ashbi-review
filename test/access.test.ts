@@ -2,15 +2,15 @@ import {SELF,env} from 'cloudflare:test';
 import {beforeEach,afterEach,expect,it,vi} from 'vitest';
 import {hashToken,sessionCookie} from '../worker/auth';
 import {sendCommentDigest} from '../worker/email';
-const replies:{status:number;body:unknown;capture?:(options:RequestInit)=>unknown}[]=[];
-const mockEmail=(status:number,body:unknown,capture?:(options:RequestInit)=>unknown)=>replies.push({status,body,capture});
+const replies:{status:number;body:unknown;capture?:(options:EmailMessageBuilder)=>unknown}[]=[];
+const mockEmail=(status:number,body:unknown,capture?:(options:EmailMessageBuilder)=>unknown)=>replies.push({status,body,capture});
 const local={authorization:'Bearer local-workers-test-key-only-32-characters-minimum','content-type':'application/json'};
 const json={'content-type':'application/json'};
 const call=(path:string,data:unknown,headers:Record<string,string>=json)=>SELF.fetch('https://review.ashbi.ca/api'+path,{method:'POST',headers,body:JSON.stringify(data)});
-beforeEach(async()=>{replies.length=0;vi.spyOn(globalThis,'fetch').mockImplementation(async(input,options={})=>{expect(String(input)).toBe('https://api.resend.com/emails');const reply=replies.shift();if(!reply)throw new Error('Unexpected email request');reply.capture?.(options);return new Response(JSON.stringify(reply.body),{status:reply.status,headers:{'content-type':'application/json'}});});await env.DB.batch(['notification_queue','email_batches','comments','pins','guests','reviews','projects','sessions','login_tokens','login_throttle'].map(t=>env.DB.prepare('DELETE FROM '+t)));});
+beforeEach(async()=>{replies.length=0;vi.spyOn(env.EMAIL!,'send').mockImplementation(async options=>{const reply=replies.shift();if(!reply)throw new Error('Unexpected email request');reply.capture?.(options);if(reply.status!==200)throw Object.assign(new Error('Email rejected'),reply.body);return {messageId:(reply.body as {id:string}).id};});await env.DB.batch(['notification_queue','email_batches','comments','pins','guests','reviews','projects','sessions','login_tokens','login_throttle'].map(t=>env.DB.prepare('DELETE FROM '+t)));});
 afterEach(()=>{expect(replies).toHaveLength(0);vi.restoreAllMocks();});
 it('only emails approved accounts, throttles requests and consumes magic links once',async()=>{
- let sent='';mockEmail(200,{id:'magic-email'},options=>{sent=String(options.body);});
+ let sent='';mockEmail(200,{id:'magic-email'},options=>{sent=JSON.stringify(options);});
  expect((await call('/auth/request',{email:'stranger@example.com'})).status).toBe(202);
  expect((await call('/auth/request',{email:'bianca@ashbi.ca'})).status).toBe(202);
  expect((await call('/auth/request',{email:'bianca@ashbi.ca'})).status).toBe(202);
@@ -46,14 +46,14 @@ it('remembers guest identity, scopes replies and prevents resolve/operator acces
 });
 it('sends one frozen digest for new guest comments and stays quiet afterward',async()=>{
  const {prefix}=await shared(),cookie=await joined(prefix);for(let n=0;n<3;n++)expect((await call(prefix+'/pins',{x_pct:n,y_pct:n,body:'Feedback '+n},{...json,cookie})).status).toBe(201);
- let sent='';mockEmail(200,{id:'digest-email'},options=>{sent=String(options.body);});
+ let sent='';mockEmail(200,{id:'digest-email'},options=>{sent=JSON.stringify(options);});
  await sendCommentDigest(env,Date.now());expect(JSON.parse(sent)).toMatchObject({to:['bianca@ashbi.ca','cameron@ashbi.ca'],subject:'3 new comments in Ashbi Review'});
  await sendCommentDigest(env,Date.now());expect((await env.DB.prepare('SELECT count(*) AS n FROM notification_queue').first<{n:number}>())!.n).toBe(0);
  expect((await env.DB.prepare('SELECT count(*) AS n FROM email_batches WHERE sent_at IS NOT NULL').first<{n:number}>())!.n).toBe(1);
 });
 it('retains queued feedback on provider failures and reuses the frozen retry',async()=>{
  const {prefix}=await shared(),cookie=await joined(prefix);await call(prefix+'/pins',{x_pct:1,y_pct:1,body:'Keep this queued'},{...json,cookie});
- mockEmail(503,{error:'temporary'});await expect(sendCommentDigest(env,Date.now())).rejects.toThrow();
+ mockEmail(429,{code:'E_RATE_LIMIT_EXCEEDED'});await expect(sendCommentDigest(env,Date.now())).rejects.toThrow();
  expect((await env.DB.prepare('SELECT count(*) AS n FROM notification_queue').first<{n:number}>())!.n).toBe(1);
  mockEmail(200,{id:'retried'});await sendCommentDigest(env,Date.now());expect((await env.DB.prepare('SELECT count(*) AS n FROM notification_queue').first<{n:number}>())!.n).toBe(0);
 });
@@ -63,9 +63,19 @@ it('expiry blocks shared reads and comments; operator can switch off links',asyn
 });
 it('keeps quiet without sender configuration and claims one concurrent digest',async()=>{
  const {prefix}=await shared(),cookie=await joined(prefix);await call(prefix+'/pins',{x_pct:1,y_pct:1,body:'One digest'},{...json,cookie});
- await sendCommentDigest({...env,RESEND_API_KEY:undefined},Date.now());expect((await env.DB.prepare('SELECT count(*) AS n FROM notification_queue').first<{n:number}>())!.n).toBe(1);
+ await sendCommentDigest({...env,EMAIL:undefined},Date.now());expect((await env.DB.prepare('SELECT count(*) AS n FROM notification_queue').first<{n:number}>())!.n).toBe(1);
  mockEmail(200,{id:'one-concurrent'});await Promise.all([sendCommentDigest(env,Date.now()),sendCommentDigest(env,Date.now())]);
  await call(prefix+'/pins',{x_pct:2,y_pct:2,body:'Next interval'},{...json,cookie});await sendCommentDigest(env,Date.now());expect((await env.DB.prepare('SELECT count(*) AS n FROM notification_queue').first<{n:number}>())!.n).toBe(1);
  mockEmail(200,{id:'next-interval'});await sendCommentDigest(env,Date.now()+900000);
  expect((await env.DB.prepare('SELECT count(*) AS n FROM notification_queue').first<{n:number}>())!.n).toBe(0);
+});
+
+it('keeps an uncertain delivery for reconciliation without sending it again',async()=>{
+ const {prefix}=await shared(),cookie=await joined(prefix);await call(prefix+'/pins',{x_pct:1,y_pct:1,body:'Keep the original feedback'},{...json,cookie});
+ mockEmail(503,{code:'E_INTERNAL_SERVER_ERROR'});
+ const time=Date.now();
+ await expect(sendCommentDigest(env,time)).rejects.toThrow();
+ await sendCommentDigest(env,time+900000);
+ expect(await env.DB.prepare('SELECT sent_at FROM email_batches').first()).toMatchObject({sent_at:null});
+ expect(await env.DB.prepare('SELECT count(*) AS n FROM notification_queue').first()).toMatchObject({n:1});
 });
