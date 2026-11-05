@@ -1,0 +1,11 @@
+# Website pins — issue #5
+
+The website viewer reuses the image review's feedback/thread/status interface and shared coordinate helpers. A saved public URL creates a private review. Browse/comment controls and 1440/768/390 viewport controls operate an isolated iframe. Pins save page path (including query), selector, element percentages, page fallback percentages, viewport and scroll position. Unique IDs/data attributes precede structural selectors. Reloads and DOM/size changes re-anchor against the current element; missing/invalid selectors fall back to document percentages. Sidebar feedback is grouped by page and filters current page/width unless Show all is selected; selecting another page's pin navigates within the saved source origin.
+
+The frame never receives dashboard credentials or calls an operator API. Parent messages can only request a selection or fill a bounded draft; an explicit parent comment form submits it. Both sides validate sender/window/origin. Sandboxing keeps same-origin privileges disabled. Complex scripts/staging login limitations from #3 remain; screenshot capture/fallback is #7. The old disposable test-dot overlay is replaced.
+
+Tests cover site input bounds, saved-origin restrictions and atomic anchor/comment persistence, plus re-anchoring/fallback geometry. Chromium tests cover reload/content shifts/page/width filtering, and a read-only real Lalaland origin rendered through the local Worker. The content-shift test changes only the local isolated DOM. CI now serves the production-built dashboard and API from the same local Worker; the synthetic development key is attached only to local API requests by the test fixture.
+
+No production deployment, merge or remote migration. Migration 0004 adds fallback page coordinates. Next is #6 share links, guests, operator magic-link sessions and batched email. The API token and Resend credentials are still required before automatic production deployment/email delivery can be accepted.
+
+Verification: CI run 41886434166 passed 43 Workers tests and all five Chromium workflows, including the real Lalaland origin. PR #12 is ready for review. Access/email implementation is now in PR #13; screenshot/polish implementation is in PR #14. Live deployment and the original five-site limitations remain separate acceptance items.

@@ -1,0 +1,11 @@
+# Sharing, sign-in and email — issue #6
+
+Each review has a random share token, optional expiry and off switch; all guest reads/writes and proxy requests revalidate it. The guest's random device token is hashed in D1 and held in a secure HttpOnly cookie scoped to that review's API path. Guest names are remembered across reloads. Guest identities never grant operator access or resolve/delete powers, and server-side identity supplies comment authors. Public comment responses omit email addresses.
+
+Cameron and Bianca have separate seeded accounts. Magic links contain 256 random bits, are stored hashed, expire after 15 minutes and are consumed atomically with session creation. The token lives in an email URL fragment (not the HTTP URL) and is removed from browser history immediately. The landing page requires an explicit Open workspace click. Sessions use secure HttpOnly SameSite=Lax cookies, expire after 30 days and are revoked on sign-out. Cookie-authenticated writes reject unrelated/null Origins; there is no public signup. Requests for unknown addresses return the same generic message; approved accounts are throttled to one link per minute.
+
+Guest comments and replies enqueue notifications atomically with the comment. Every 15 minutes, the Cron freezes at most 100 comments into a durable batch and claims it before sending one message to both operators. New comments wait for the next interval. Explicit Cloudflare rate-limit rejections can retry the frozen batch. Unknown outcomes hold the batch for reconciliation to avoid duplicate sends. Success records the provider ID and clears the batch's queue entries.
+
+The Worker sends from `review@ashbi.ca` through the `EMAIL` binding, restricted to the two verified operator destinations. Migration 0005 adds access/outbox tables and the two approved users.
+
+Tests cover single-use/expired login links, Bianca's distinct identity, logout, cross-origin rejection, guest identity/replies/access restrictions, link expiry/revocation, digest grouping/concurrency/quiet intervals/provider retry/configuration. Chromium adds a fresh phone guest context with no operator test key, persistent named comment, dashboard reply/resolve, guest reload and revoked-link failure. Live magic-link delivery and a real 15-minute Cron digest remain blocked on production binding and delivery verification.
