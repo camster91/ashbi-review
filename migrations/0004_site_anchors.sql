@@ -1,0 +1,2 @@
+ALTER TABLE pins ADD COLUMN page_x_pct REAL CHECK(page_x_pct BETWEEN 0 AND 100);
+ALTER TABLE pins ADD COLUMN page_y_pct REAL CHECK(page_y_pct BETWEEN 0 AND 100);
