@@ -1,0 +1,15 @@
+import {test,expect,localHeaders} from './local';
+test('phone guest keeps their name and feedback; operator replies and resolves',async({page,browser})=>{
+ const p=await page.request.post('/api/projects',{headers:localHeaders,data:{client_name:'Guest phone QA',name:'Shared design'}});const project=(await p.json()).project.id;
+ const upload=await page.request.post(`/api/projects/${project}/reviews`,{headers:{...localHeaders,'content-type':'image/png','x-file-name':'Shared.png'},data:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6RsAAAAASUVORK5CYII=','base64')});const id=(await upload.json()).review.id;
+ const share=await page.request.get(`/api/reviews/${id}/share`,{headers:localHeaders});const link=new URL((await share.json()).url);
+ const guestContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const guest=await guestContext.newPage();
+ await guest.goto('http://127.0.0.1:8788/'+link.search);await guest.getByRole('textbox',{name:'Your name',exact:true}).fill('Client on phone');await guest.getByRole('button',{name:'Open review',exact:true}).click();
+ const image=guest.getByRole('img',{name:'Shared.png',exact:true});await expect(image).toBeVisible();await image.click();await guest.getByRole('textbox',{name:'Comment',exact:true}).fill('Please brighten this image.');await guest.getByRole('button',{name:'Save pin',exact:true}).click();await expect(guest.getByRole('button',{name:'Pin 1, open'})).toBeVisible();
+ await guest.reload();await expect(guest.getByRole('button',{name:'Pin 1, open'})).toBeVisible();await expect(guest.getByRole('button',{name:'Open review',exact:true})).toHaveCount(0);await expect(guest.getByRole('button',{name:'Resolve pin',exact:true})).toHaveCount(0);
+ const rejected=await guest.request.get('/api/projects');expect(rejected.status()).toBe(401);
+ await page.goto('/?review='+id);await page.locator('.pin-list button').filter({hasText:'Please brighten this image.'}).click();await page.getByRole('textbox',{name:'Add a reply',exact:true}).fill('Updated — thank you.');await page.getByRole('button',{name:'Post reply',exact:true}).click();await expect(page.getByText('Updated — thank you.',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Resolve pin',exact:true}).click();await expect(page.getByRole('button',{name:'Reopen pin',exact:true})).toBeVisible();
+ await guest.reload();await guest.getByRole('combobox',{name:'Show',exact:true}).selectOption('resolved');await guest.locator('.pin-list button').filter({hasText:'Please brighten this image.'}).click();await expect(guest.getByText('Updated — thank you.',{exact:true})).toBeVisible();await expect(guest.getByRole('button',{name:'Resolve pin',exact:true})).toHaveCount(0);
+ expect(await guest.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.request.patch(`/api/reviews/${id}/share`,{headers:localHeaders,data:{link_enabled:false,expires_at:null}});await guest.reload();await expect(guest.getByRole('alert')).toContainText('unavailable');await guestContext.close();
+});
