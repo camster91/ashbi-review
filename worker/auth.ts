@@ -22,12 +22,12 @@ authApi.onError((error,c)=>{if(error instanceof InputError)return c.json({error:
 authApi.get('/me',async c=>{const user=await operator(c.req.raw,c.env);return user?c.json({user}):c.json({error:'Sign in to open your workspace.'},401);});
 authApi.post('/request',async c=>{
  const data=await jsonBody(c.req.raw);const address=email(data.email);if(!address)throw new InputError('Enter your email address.');
- if(!c.env.RESEND_API_KEY||!c.env.EMAIL_FROM)return c.json({error:'Email sign-in is not configured yet.'},503);
+ if(!c.env.EMAIL||!c.env.EMAIL_FROM)return c.json({error:'Email sign-in is not configured yet.'},503);
  const user=await c.env.DB.prepare('SELECT * FROM users WHERE email=?').bind(address).first<User>();
  if(user){
   const throttle=await c.env.DB.prepare('INSERT INTO login_throttle(user_id,requested_at) VALUES(?,unixepoch()) ON CONFLICT(user_id) DO UPDATE SET requested_at=excluded.requested_at WHERE requested_at<unixepoch()-60 RETURNING user_id').bind(user.id).first();
   if(throttle){const raw=randomToken(),hash=await hashToken(raw);await c.env.DB.prepare('INSERT INTO login_tokens(token_hash,user_id,expires_at) VALUES(?,?,unixepoch()+900)').bind(hash,user.id).run();
-   try{await sendEmail(c.env,[user.email],'Sign in to Ashbi Review',`Open this link to sign in as ${user.name}. It expires in 15 minutes and works once.\n\n${c.env.APP_ORIGIN??'https://review.ashbi.ca'}/#login=${raw}`,'login-'+hash);}catch(error){await c.env.DB.prepare('DELETE FROM login_tokens WHERE token_hash=?').bind(hash).run();throw error;}
+   try{await sendEmail(c.env,[user.email],'Sign in to Ashbi Review',`Open this link to sign in as ${user.name}. It expires in 15 minutes and works once.\n\n${c.env.APP_ORIGIN??'https://review.ashbi.ca'}/#login=${raw}`);}catch(error){await c.env.DB.prepare('DELETE FROM login_tokens WHERE token_hash=?').bind(hash).run();throw error;}
   }
  }
  return c.json({message:'If this address has access, a sign-in link is on its way.'},202);

@@ -4,7 +4,7 @@ export class InputError extends Error {
   constructor(message: string, public status: 400 | 413 | 415 = 400) { super(message); }
 }
 
-export async function readBounded(request: Request, limit: number): Promise<Uint8Array> {
+export async function readBounded(request: Pick<Request, 'headers' | 'body'>, limit: number): Promise<Uint8Array> {
   if (Number(request.headers.get('content-length')) > limit) throw new InputError('File is too large.', 413);
   const reader = request.body?.getReader();
   if (!reader) return new Uint8Array();
