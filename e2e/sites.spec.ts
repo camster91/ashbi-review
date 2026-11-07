@@ -6,7 +6,13 @@ test('website pins survive reload, content shifts, page and width filters',async
  let shifted=false;
  await page.route('**/p/**',route=>{const path=new URL(route.request().url()).pathname;return route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"sandbox allow-scripts allow-forms allow-popups; frame-ancestors 'self'"},body:`<!doctype html><html><body style="margin:0"><a href="${path.replace(/\/[^/]*$/,'/about')}">About</a>${shifted?'<div style="height:80px">New content</div>':''}<h1 id="headline" tabindex="0" style="height:120px;margin:20px;background:#eee">A stable headline</h1><script>${siteOverlay('http://127.0.0.1:8788')}</script></body></html>`});});
  await page.goto('/?review='+id);const frame=page.frameLocator('iframe');await expect(frame.locator('#headline')).toBeVisible();
+ const canvas=page.locator('.workspace-canvas');
+ const initialWidth=(await canvas.boundingBox())!.width;
+ await page.getByRole('button',{name:'Hide feedback'}).click();
+ await expect(page.getByRole('complementary',{name:'Review feedback'})).toBeHidden();
+ expect((await canvas.boundingBox())!.width).toBeGreaterThan(initialWidth);
  await page.getByRole('button',{name:'Comment',exact:true}).click();await frame.locator('#headline').click();
+ await expect(page.getByRole('complementary',{name:'Review feedback'})).toBeVisible();
  await page.getByRole('textbox',{name:'Comment',exact:true}).fill('Persistent website feedback');await page.getByRole('button',{name:'Save pin',exact:true}).click();
  await expect(frame.getByRole('button',{name:'Pin 1, open',exact:true})).toBeVisible();
  const before=await frame.getByRole('button',{name:'Pin 1, open'}).boundingBox();const elementBefore=await frame.locator('#headline').boundingBox();
